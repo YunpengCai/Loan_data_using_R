@@ -1,0 +1,251 @@
+---
+title: "Exploration of loan data"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+options(repos="https://cran.rstudio.com" )
+knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
+
+setwd('D:/udacity-git-course')
+setwd('Loan_data')
+pf <-read.csv('prosperLoanData.csv')
+
+install.packages("ggplot2", dependencies = T) 
+install.packages("knitr", dependencies = T)
+install.packages("dplyr", dependencies = T)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+```
+# Structure of dataset
+
+```{r}
+str(pf)
+```
+
+* Dataset consists of 81 variables, with 113,937 observations.
+
+# Univariate exploration
+```{r}
+ggplot(aes(x=LoanStatus, y=..count..), data=pf) + 
+  geom_bar() +theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+```{r}
+levels(pf$LoanStatus)
+ggplot(data=pf, aes(x=LoanStatus))+
+  geom_bar(aes(y = (..count..)/sum(..count..)))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+* Most of the loans are in current state(50 %), and 34 % of loans has completed. 
+* One important thing to be noted, 10 % of loans are charged-off and of high risk to lenders. 
+```{r}
+unique(pf$Term)
+ggplot(aes(x=Term),data=pf)+
+  geom_bar()
+```
+
+* There are 12, 36 and 60 months loan as choices, and most of the loan is 3-year long.
+```{r}
+ ggplot(aes(x=StatedMonthlyIncome), data=pf) + 
+  geom_histogram()
+  
+```
+* Some high income makes the State monthly income histogram has a long tail.
+```{r}
+summary(pf$BorrowerRate)
+summary(pf$BorrowerAPR)
+```
+
+
+
+```{r}
+summary(pf$StatedMonthlyIncome)
+length(which(pf$StatedMonthlyIncome>10000))
+median(pf$StatedMonthlyIncome)
+```
+```{r}
+ggplot(aes(x=StatedMonthlyIncome), data=pf) + 
+  geom_histogram(bins=100)+ scale_x_continuous(trans='log10',limits = c(100, 100000))
+```
+
+* After transforming the x scale to log10 and focus on the center, it now close to a normal distribution with a median income of 4667.
+* Does people with higher income less likely to past due?
+
+# Univariate Analysis
+## Structure of data
+There are 81 variables and 113,937 observations in the dataset.
+
+## Main observations
+* Most borrowers have an income between 3200 and 6825 per month, with a median income of 4667 dollar.
+* Most loan has a term of 36 months.
+* 10 % of loans are charged-off, which should be concerned.
+
+## Main main feature of interest
+The main feature interested is the Loan status data, which consist of  "Cancelled", "Chargedoff", "Completed","Current","Defaulted", "FinalPaymentInProgress" "Past Due (>120 days)","Past Due (1-15 days)" ,"Past Due (16-30 days)", "Past Due (31-60 days)","Past Due (61-90 days)","Past Due (91-120 days)".
+I am intested in if other variables can predict the high risk loans such as charged off and past due.
+
+## Of the features you investigated, were there any unusual distributions?
+The stated income has a long tail and right skewed due to some large values, a log10 transformation resulted in a normal distribution.
+
+# Bivariate exploration
+```{r}
+ggplot(data=pf, aes(x=BorrowerRate, y=LenderYield))+
+  geom_point()+
+  geom_smooth(method='lm',formula=y~x)
+```
+```{r}
+fit=lm(LenderYield ~ BorrowerRate, data = pf)
+summary(fit)
+```
+
+* LenderYield equal to the interest rate on the loan minus the servicing fee, a well-fit linear model suggest the servicing fee is proportional to the rate instead of a fixed rate.
+```{r}
+ggplot(aes(x=LoanStatus,y=StatedMonthlyIncome), data=pf)+
+  geom_boxplot()+scale_y_continuous(trans='log10',limits = c(100, 100000))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  stat_summary(fun.y = 'mean', geom = "text",aes(label=sprintf("%1.1f", ..y..)))
+```
+
+* For each loan status group, we found the completed group and past due groups have a similar mean stated income levels. It is unlikely that the income levels affect whether one person will past due or not.
+
+```{r}
+ggplot(pf, aes(x = CreditGrade, y = LoanStatus)) +
+  geom_count(alpha = 0.5)
+```
+
+* Credit grade is not associated with past due record, they are undefined grade before finish current progress.
+
+```{r}
+pf_due= pf[grep("Due", pf$LoanStatus), ]
+ggplot(pf_due, aes(x= Term)) +
+   geom_bar(aes(y = (..count..)/sum(..count..)))+
+  ylab('Percentage of past due')+
+  xlab('Lenth of loan / months')
+  
+```
+
+* A subset of Loan status of past due is created. It seems that loans with 36 months are most likely to past due, whilst short loans of 12-month will pay back in time.
+
+```{r}
+summary(pf$ProsperScore)
+ggplot(data=subset(pf, !is.na(ProsperScore)), aes(y = ProsperScore, x = LoanStatus)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  stat_summary(fun.y = 'mean', geom = "text",aes(label=sprintf("%1.1f", ..y..)))
+```
+
+- Here it is clear that with high prosper ratings (based on historical credit record), the loans are less likely to past due. The loans with a mean prosper rating of 5.0 are of high risk (past due or charge-off)
+
+# Bivariate analysis
+## Main observations
+* The severcing fee is probably proportional to the interest rate, as the lender yield is almost linear to the borrower interest rate with R^2 of 0.9984
+* Stated monthly income does not show a significant diffrence of whether a loan is charged-off or past due.
+* Loan of 36-month long is most likely to past due.
+* The properscore under 5.4 is highly likely to charged-off or past due, whilst a score of 6.5 is likely to completed the loan.
+
+## Strong relationships found
+* The properscore is highly associated with the Loan status of whether complete or charged-off or past due.
+
+# Multivariate exploration
+
+
+```{r}
+ggplot(data=subset(pf, !is.na(ProsperScore)), aes(y = ProsperScore, x = LoanStatus)) +
+  facet_wrap(~Term)+
+  geom_boxplot()+
+  scale_y_continuous(breaks=seq(0,9,1))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+* For 36-month long loans with prosper score lower than 5 is highly likely to charged off or past due
+* Not enough data is collected for 12-month loans as some of the box-plots are incomplete
+```{r}
+install.packages('reshape2')
+library(reshape2)
+```
+```{r}
+ggplot(data=subset(pf, !is.na(ProsperScore)), aes(LoanStatus, EmploymentStatus)) + 
+  geom_tile(aes(fill = ProsperScore), colour = "white") + 
+  scale_fill_gradient(low = "white",
+  high = "Black") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  theme(axis.text.y = element_text(size=8, hjust = 1))
+ 
+
+```
+
+* It is difficult to get a high prosper score if one person is retired or has undefined employment status(the other column).
+* Even with high prosper scores, there is still risk of charged off or past due, which should be noted in the full-time employment row.
+
+# Multivariate Analysis
+## Relationships found
+It is found that the 36-month long loans with a proper score lower than 5 are in high risk of charged off or past due. Overall, the lower prosper score one has, the higher risk it is. Therefore, the prosper score is a good indicator in most cases. However, when in combination with employment status, higher prosper score does not always work well. In full-time employment row, high prosper scores can also have charged-off or past due, which means more complex prediction model should be built for risk control using maching learning.
+
+# Final Plots and Summary
+## Plot one
+```{r}
+ggplot(aes(x=LoanStatus, y=..count..), data=pf) + 
+  geom_bar() +theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  ylab('Number of cases')+
+  xlab('Loan status') +
+  ggtitle('Number of cases for different loan status') +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+## Description one
+This count distribution of different loan status reveals our main intested features. The high risk status, such as charged off and past due need more attention in the subsequent analysis. Charged off has a large number of cases, which is around 10 % of the total number.
+
+## Plot two
+```{r}
+pf_due= pf[grep("Due", pf$LoanStatus), ]
+ggplot(pf_due, aes(x= Term)) +
+   geom_bar(aes(y = (..count..)/sum(..count..)))+
+  ylab('Percentage of past due')+
+  xlab('Length of loan / months')+
+  ggtitle('Percentage of past due over loan lengths')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+ggplot(data=subset(pf, !is.na(ProsperScore)), aes(y = ProsperScore, x = LoanStatus)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  stat_summary(fun.y = 'mean', geom = "text",aes(label=sprintf("%1.1f", ..y..)))+
+  ylab('Prosper score (mean score displayed)') +
+  xlab('Loan status')+
+  ggtitle('Prosper scores of different loan status (score from 1 to 10)')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Description two
+The loans with 36-month long has the highest risk of overdue. Based on the average prosper score (based on previous credit record), we can see that borrower with a high score above 6.5 are more likely to complete the loans whilst people with score lower than 5 are of high risks to be charged off or past due.
+
+## Plot three
+```{r}
+ggplot(data=subset(pf, !is.na(ProsperScore)), aes(LoanStatus, EmploymentStatus)) + 
+  geom_tile(aes(fill = ProsperScore), colour = "white") + 
+  scale_fill_gradient(low = "white",
+  high = "Black") +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  theme(axis.text.y = element_text(size=8, hjust = 1))+
+  ylab('Employment status') +
+  xlab('Loan status')+
+  ggtitle('Prosper score over employment status and loan status')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Description three
+Although as expected, people with higher prosper score are less likely to be charged off or past due. It does not always work well when looking into different employment status. The full-time employment group can still be charged off or past due with a relatively high prosper score. A more complex model is required with machine learning algorithms. 
+
+# Reflection
+The loan data set contains 81 variables and 113937 observations, which is a large one need  a lot of time to understand and explore. I started by understanding the individual variables and looking for my intested feature. Eventually, I decided to explore the variables can explain the charged off and past due in loan status variable as the are associated with high risks to lenders.
+<br/>
+<br/>
+I first looked into the stated monthly income and tried to find if borrower with higher income are less likely to charged off or past due. However, there is not a clear relationship between income levels and risks. Then I looked in to the prosper scores and length of loans. There were clear relationships between the risks and scores or length of loans. Higher prosperscore indicate less risk of past due or charged off, whilst 36-month long loans have the highest ratios of the past due.
+<br/>
+<br/>
+Although prosper scores seems to be a good indicator but relying on a single variable does not always work as I expected. A multivariate model is a better way to predict the risk of a loan, which utilises more data with more dimensions using machine learning.
+
+
